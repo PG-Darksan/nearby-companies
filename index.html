@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>周辺企業マップ | 現在地から近くの企業・オフィスを検索</title>
+  <meta name="description" content="現在地を取得して周辺の企業・オフィス・工場・上場企業本社を地図とリストで素早く検索できるWebアプリ。業種フィルタ・距離順ソート・CSV出力対応。" />
+  <meta name="theme-color" content="#0f172a" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Header -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9v.01M9 12v.01M9 15v.01M9 18v.01" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">周辺企業マップ</h1>
+          <p class="brand-subtitle" id="currentLocationLabel">現在地または任意の場所から周辺企業を探索</p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <!-- Place Search Input -->
+        <form id="placeSearchForm" class="place-search-form" autocomplete="off">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input
+            type="text"
+            id="placeSearchInput"
+            placeholder="駅名・住所で場所移動（例: 渋谷駅、梅田）"
+            aria-label="駅名・住所で場所を検索"
+          />
+          <button type="submit" class="place-search-btn">移動</button>
+        </form>
+
+        <!-- Primary Geolocation Button -->
+        <button type="button" id="locateBtn" class="btn btn-primary">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path>
+            <circle cx="12" cy="12" r="8"></circle>
+          </svg>
+          <span>現在地から検索</span>
+        </button>
+
+        <!-- Theme Toggle -->
+        <button type="button" id="themeToggleBtn" class="btn btn-icon" title="テーマ切替" aria-label="ダーク/ライトモード切替">
+          <svg id="themeIconSun" class="icon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"></circle>
+            <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+          </svg>
+          <svg id="themeIconMoon" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Split -->
+    <main class="main-layout">
+      <!-- Sidebar: Controls & Company List -->
+      <aside class="sidebar" id="sidebarPanel">
+        <!-- Controls Section -->
+        <section class="controls-panel">
+          <div class="control-row">
+            <div class="radius-group">
+              <label for="radiusSelect" class="control-label">検索範囲</label>
+              <select id="radiusSelect" class="select-input">
+                <option value="500">半径 500m</option>
+                <option value="1000">半径 1km</option>
+                <option value="2000" selected>半径 2km</option>
+                <option value="3000">半径 3km</option>
+                <option value="5000">半径 5km</option>
+              </select>
+            </div>
+
+            <div class="sort-group">
+              <label for="sortSelect" class="control-label">並び順</label>
+              <select id="sortSelect" class="select-input">
+                <option value="distance">近い順</option>
+                <option value="featured">法人情報充実順</option>
+                <option value="name">名前順</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Keyword Filter inside results -->
+          <div class="filter-search-box">
+            <svg class="search-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            </svg>
+            <input
+              type="search"
+              id="keywordFilterInput"
+              placeholder="取得結果から企業名・業種・住所で絞り込み..."
+              aria-label="取得結果のキーワード絞り込み"
+            />
+          </div>
+
+          <!-- Category Chips -->
+          <div class="category-chips" id="categoryChips" role="tablist" aria-label="業種カテゴリフィルタ">
+            <button type="button" class="chip active" data-category="all">すべて</button>
+            <button type="button" class="chip" data-category="corporate">🏢 一般企業・本社</button>
+            <button type="button" class="chip" data-category="it_pro">💻 IT・専門・研究</button>
+            <button type="button" class="chip" data-category="manufacturing">🏭 製造・工場・建設</button>
+            <button type="button" class="chip" data-category="finance_realty">🏦 金融・不動産・士業</button>
+            <button type="button" class="chip" data-category="office_bldg">🏙️ オフィスビル</button>
+            <button type="button" class="chip" data-category="saved">★ 保存済み</button>
+          </div>
+
+          <!-- Summary Bar -->
+          <div class="results-toolbar">
+            <div class="results-count">
+              <span id="resultCountNum">0</span> 件の企業・事業所
+              <span id="statusBadge" class="status-badge hidden">検索中...</span>
+            </div>
+            <div class="toolbar-btns">
+              <button type="button" id="exportCsvBtn" class="btn-text" title="表示中の企業リストをCSVでダウンロード" disabled>
+                CSV出力
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Company Cards List -->
+        <div class="company-list" id="companyList" aria-live="polite">
+          <!-- Initial Welcome Guide -->
+          <div class="empty-state" id="welcomeState">
+            <div class="empty-icon">📍</div>
+            <h2>現在地から周辺企業を探しましょう</h2>
+            <p>
+              上の<strong>「現在地から検索」</strong>ボタンを押すと、あなたの現在地を取得して周辺の企業・オフィス・本社・工場を地図と一覧で表示します。
+            </p>
+            <button type="button" id="welcomeLocateBtn" class="btn btn-primary btn-lg">
+              現在地を取得して検索する
+            </button>
+            <div class="quick-areas">
+              <span class="quick-areas-label">または主要エリアで試す：</span>
+              <div class="quick-area-chips">
+                <button type="button" class="area-chip" data-lat="35.6812" data-lon="139.7671" data-name="東京駅周辺">東京・丸の内</button>
+                <button type="button" class="area-chip" data-lat="35.6580" data-lon="139.7016" data-name="渋谷駅周辺">渋谷</button>
+                <button type="button" class="area-chip" data-lat="34.7025" data-lon="135.4959" data-name="大阪・梅田周辺">大阪・梅田</button>
+                <button type="button" class="area-chip" data-lat="35.1709" data-lon="136.8815" data-name="名古屋駅周辺">名古屋</button>
+                <button type="button" class="area-chip" data-lat="33.5902" data-lon="130.4207" data-name="博多駅周辺">福岡・博多</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Map Section -->
+      <section class="map-section">
+        <div id="map" class="map-canvas" role="application" aria-label="周辺企業マップ"></div>
+
+        <!-- Floating "Search Here" Button when map is panned -->
+        <button type="button" id="searchMapCenterBtn" class="floating-map-btn hidden">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
+            <path d="M21 3v5h-5"></path>
+          </svg>
+          <span>この地図の中心で再検索</span>
+        </button>
+
+        <!-- Mobile View Switcher -->
+        <div class="mobile-view-tabs">
+          <button type="button" id="mobileTabMap" class="mobile-tab active">🗺️ 地図</button>
+          <button type="button" id="mobileTabList" class="mobile-tab">📋 企業一覧 (<span id="mobileCountBadge">0</span>)</button>
+        </div>
+
+        <!-- Map Legend -->
+        <div class="map-legend">
+          <span class="legend-item"><i class="dot dot-user"></i>検索地点</span>
+          <span class="legend-item"><i class="dot dot-corporate"></i>一般企業・本社</span>
+          <span class="legend-item"><i class="dot dot-it"></i>IT・専門</span>
+          <span class="legend-item"><i class="dot dot-mfg"></i>製造・建設</span>
+          <span class="legend-item"><i class="dot dot-fin"></i>金融・不動産</span>
+        </div>
+      </section>
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script src="./app.js"></script>
+</body>
+</html>
